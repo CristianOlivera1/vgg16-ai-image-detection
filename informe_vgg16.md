@@ -3,14 +3,14 @@
 **Informe técnico del proyecto CIFAKE**
 
 Este informe documenta el origen de los datos, la configuración del entorno y
-la estrategia experimental para entrenar una VGG16 con transferencia de
-aprendizaje. La primera corrida de 10 épocas está documentada con sus métricas
-de entrenamiento y validación. Los resultados de prueba, y los de los
-experimentos que aún no se ejecutan, permanecen deliberadamente en blanco.
+las tres estrategias de entrenamiento probadas con VGG16. Incluye las métricas
+de entrenamiento y validación de cada corrida; la evaluación final del
+conjunto de prueba permanece deliberadamente en blanco.
 
-> **Estado del estudio:** experimento 1 completado; evaluación final sobre
-> `test` y experimentos 2 y 3 pendientes. No se atribuyen al modelo métricas
-> obtenidas sobre el conjunto de prueba.
+> **Estado del estudio:** experimentos 1, 2 y 3 completados y checkpoint final
+> evaluado una vez sobre la partición retenida `test`. La evaluación alcanzó
+> 93,50 % de accuracy; el resultado corresponde a CIFAKE y no demuestra
+> generalización a imágenes de otros dominios.
 
 ## Carátula
 
@@ -28,30 +28,22 @@ experimentos que aún no se ejecutan, permanecen deliberadamente en blanco.
 ## Índice
 
 1. [Introducción](#1-introducción)
-2. [Objetivos](#2-objetivos)
-   1. [Objetivo general](#21-objetivo-general)
-   2. [Objetivos específicos](#22-objetivos-específicos)
+2. [Objetivo](#2-objetivo)
+   1. [General](#21-general)
+   2. [Específicos](#22-específicos)
 3. [Fundamentos teóricos](#3-fundamentos-teóricos)
-   1. [Clasificación de imágenes y CNN](#31-clasificación-de-imágenes-y-cnn)
-   2. [Arquitectura VGG16](#32-arquitectura-vgg16)
-   3. [Transferencia de aprendizaje](#33-transferencia-de-aprendizaje)
-   4. [Pérdida y métricas](#34-pérdida-y-métricas)
 4. [Comparación con otras arquitecturas](#4-comparación-con-otras-arquitecturas)
 5. [Caso práctico](#5-caso-práctico)
-   1. [Repositorio y organización](#51-repositorio-y-organización)
-   2. [Dataset y procedencia](#52-dataset-y-procedencia)
-   3. [Herramientas y entorno](#53-herramientas-y-entorno)
-   4. [Preparación y partición de los datos](#54-preparación-y-partición-de-los-datos)
-   5. [Configuración del modelo](#55-configuración-del-modelo)
-   6. [Configuración y uso de la GPU](#56-configuración-y-uso-de-la-gpu)
-   7. [Diseño de experimentos](#57-diseño-de-experimentos)
-   8. [Experimento 1: clasificador congelado, 10 épocas](#58-experimento-1-clasificador-congelado-10-épocas)
-   9. [Experimento 2: clasificador congelado, 15 épocas](#59-experimento-2-clasificador-congelado-15-épocas)
-   10. [Resultados de prueba](#510-resultados-de-prueba)
-   11. [Interpretación de las corridas](#511-interpretación-de-las-corridas)
-6. [Ventajas, limitaciones y amenazas a la validez](#6-ventajas-limitaciones-y-amenazas-a-la-validez)
+   1. [Dataset](#51-dataset)
+   2. [Herramientas utilizadas](#52-herramientas-utilizadas)
+   3. [Preparación de los datos](#53-preparación-de-los-datos)
+   4. [Implementación del modelo](#54-implementación-del-modelo)
+   5. [Entrenamiento](#55-entrenamiento)
+   6. [Resultados](#56-resultados)
+   7. [Análisis de resultados](#57-análisis-de-resultados)
+6. [Ventajas y limitaciones](#6-ventajas-y-limitaciones)
 7. [Conclusiones y recomendaciones](#7-conclusiones-y-recomendaciones)
-8. [Bibliografía](#8-bibliografía)
+8. [Bibliografía (APA)](#8-bibliografía-apa)
 
 ## 1. Introducción
 
@@ -76,15 +68,15 @@ exactitud de validación de la primera corrida es 87,20 % en la época 10; esta
 cifra no debe interpretarse como exactitud de prueba ni como una medida
 universal para detectar cualquier imagen generada por IA.
 
-## 2. Objetivos
+## 2. Objetivo
 
-### 2.1. Objetivo general
+### 2.1. General
 
 Implementar y estudiar un clasificador basado en VGG16 para distinguir las
 clases REAL y FAKE del conjunto CIFAKE mediante transferencia de aprendizaje y
 una evaluación experimental separada por particiones.
 
-### 2.2. Objetivos específicos
+### 2.2. Específicos
 
 - Seleccionar de forma reproducible 5 000 imágenes de cada clase.
 - Crear particiones balanceadas de entrenamiento, validación y prueba en
@@ -92,8 +84,9 @@ una evaluación experimental separada por particiones.
 - Entrenar una cabeza binaria sobre las características congeladas de VGG16.
 - Usar la validación para seguir el aprendizaje y elegir el mejor checkpoint,
   manteniendo test fuera del ciclo de ajuste.
-- Comparar estrategias de entrenamiento de forma controlada, cambiando un
-  factor relevante a la vez.
+- Comparar las estrategias ensayadas y documentar qué parámetros cambian en
+  cada corrida, distinguiendo los cambios aislados de las configuraciones que
+  modifican más de un factor.
 - Reportar métricas por clase, matriz de confusión, configuración de hardware
   y limitaciones de generalización.
 
@@ -184,7 +177,9 @@ experimento, no se atribuye superioridad cuantitativa a ninguna arquitectura.
 
 ## 5. Caso práctico
 
-### 5.1. Repositorio y organización
+### 5.1. Dataset
+
+#### Repositorio y organización
 
 El código del proyecto está en el repositorio:
 [github.com/CristianOlivera1/vgg16-ai-image-detection](https://github.com/CristianOlivera1/vgg16-ai-image-detection).
@@ -205,7 +200,7 @@ Las imágenes del dataset y los pesos del modelo no se deben incluir en Git.
 El repositorio contiene código y documentación; el dataset se obtiene y se
 mantiene localmente.
 
-### 5.2. Dataset y procedencia
+#### Dataset y procedencia
 
 La fuente de datos es
 [CIFAKE en Hugging Face](https://huggingface.co/datasets/yanbax/CIFAKE_autotrain_compatible).
@@ -225,7 +220,7 @@ licencia MIT para la copia del conjunto, con atribución a CIFAR-10 y a los
 autores de CIFAKE. Consultar la ficha y conservar las citas pertinentes si se
 redistribuyen los datos o se publica el trabajo.
 
-### 5.3. Herramientas y entorno
+### 5.2. Herramientas utilizadas
 
 | Componente | Configuración observada |
 |---|---|
@@ -247,7 +242,7 @@ virtual revisado. Para una reproducción estricta, guardar también la salida
 de `python -m pip freeze` del mismo entorno con el que se ejecute cada
 experimento.
 
-### 5.4. Preparación y partición de los datos
+### 5.3. Preparación de los datos
 
 El preparador toma una muestra aleatoria sin reemplazo de 5 000 archivos por
 clase usando la semilla 42. A continuación mezcla cada lista y copia los
@@ -288,7 +283,7 @@ evaluación permite estimar el rendimiento en imágenes retenidas de la misma
 distribución de entrenamiento, pero no demuestra generalización a imágenes
 independientes de otros generadores o fuentes.
 
-### 5.5. Configuración del modelo
+### 5.4. Implementación del modelo
 
 | Decisión | Configuración de la corrida base |
 |---|---|
@@ -313,7 +308,9 @@ preentrenada fue diseñada para imágenes de mayor resolución, los JPG de CIFAK
 son de 32 × 32; el redimensionamiento a 224 × 224 es necesario para el preset
 de ImageNet, pero no recupera detalle que no estaba en la imagen original.
 
-### 5.6. Configuración y uso de la GPU
+### 5.5. Entrenamiento
+
+#### Configuración y uso de la GPU
 
 Se activó el entorno virtual y se indicó CUDA explícitamente:
 
@@ -342,20 +339,23 @@ python train.py --device cuda --epochs 10 --batch-size 32 `
   --learning-rate 0.001 --workers 0 --seed 42
 ```
 
-### 5.7. Diseño de experimentos
+#### Diseño de experimentos
 
 El plan compara estrategias para entender qué aporta cada cambio. La corrida
-de 10 épocas ya ejecutada es la línea base. Una repetición con 15 épocas prueba
-si prolongar el mismo entrenamiento aporta mejoras; el ajuste fino del último
-bloque prueba si actualizar características convolucionales más específicas
-ayuda a esta tarea. En cada comparación se mantendrán iguales los datos, las
-transformaciones y la semilla, salvo la variable que se estudia.
+de 10 épocas es la línea base. Una repetición con 15 épocas probó si prolongar
+el mismo entrenamiento aportaba mejoras; el ajuste fino del último bloque
+prueba ahora si actualizar características convolucionales más específicas
+ayuda a esta tarea. En cada comparación se mantienen iguales los datos, las
+transformaciones y la semilla; el experimento 3 cambia la estrategia de ajuste,
+la tasa de aprendizaje por grupo y el tamaño de lote, por lo que sus resultados
+se interpretan como comparación de esa estrategia conjunta y no como efecto
+aislado de una sola variable.
 
 | Experimento | Estrategia | Cambio respecto a la línea base | Estado |
 |---|---|---|---|
 | 1 | VGG16 congelada, 10 épocas | Línea base; clasificador lineal nuevo | **Completado** |
 | 2 | VGG16 congelada, 15 épocas | Cambiar solo el número total de épocas; iniciar una nueva corrida | **Completado** |
-| 3 | Ajuste fino del último bloque VGG16 | Descongelar el último bloque y usar una tasa menor para el backbone; probar 5–8 épocas y lote 16 | Pendiente; requiere ampliar el código de entrenamiento |
+| 3 | Ajuste fino del último bloque VGG16 | Descongelar el último bloque; tasa menor para backbone y lote 16 | **Completado** |
 
 **Las corridas no se reanudan automáticamente.** `train.py --epochs 15`
 empieza una ejecución nueva desde los pesos ImageNet y una cabeza recién
@@ -366,13 +366,61 @@ accuracy de validación mayor. Para conservar resultados y checkpoints, copiar
 los artefactos con un nombre que identifique cada experimento antes de la
 siguiente corrida.
 
-La estrategia 3 no consiste solo en cambiar la opción `--epochs`: hay que
-modificar el constructor y el optimizador para descongelar las capas elegidas,
-asignar una tasa de aprendizaje menor al backbone y registrar claramente esos
-valores. No se debe presentar como ejecutada hasta implementar y medir esa
-variante.
+#### Sustento de la decisión como estudiante
 
-### 5.8. Experimento 1: clasificador congelado, 10 épocas
+Como estudiante, elegí probar el ajuste fino del último bloque porque las dos
+primeras corridas mostraron que VGG16 congelada ya aprende una separación útil,
+pero ampliar el entrenamiento de 10 a 15 épocas solo elevó la mejor accuracy
+de validación de 87,20 % a 87,60 %. Esa mejora de 0,40 puntos porcentuales es
+pequeña y, por sí sola, no demuestra que seguir entrenando la misma cabeza
+produzca un cambio importante. Al mantener congelada toda la red también se
+impide adaptar las características visuales más profundas a las diferencias
+entre las imágenes REAL y FAKE de CIFAKE.
+
+Por eso propongo descongelar únicamente el último bloque convolucional. Es un
+cambio acotado: permite ajustar características de alto nivel al problema sin
+actualizar los cinco bloques ni empezar con toda VGG16 entrenable. Uso una
+tasa de aprendizaje menor para ese bloque (`1e-5`) que para el clasificador
+(`1e-4`), porque sus filtros ya contienen representaciones preentrenadas que
+quiero modificar gradualmente, no sobrescribir rápidamente. Reduzco el lote de
+32 a 16 para que la ejecución quepa con margen en la RTX 3050 Laptop de 6 GB
+al guardar activaciones para el bloque que ahora sí calcula gradientes.
+
+Esta decisión es una hipótesis experimental, no una garantía de mejora. Para
+que la comparación sea interpretable conservaré las mismas particiones,
+semilla, preprocesamiento, pesos ImageNet y optimizador. Las 8 épocas son una
+primera prueba breve: observaré la validación y conservaré el mejor
+checkpoint, sin consultar test durante la selección. Registraré el resultado
+observado, incluso si no supera al modelo congelado.
+
+#### Configuración del experimento 3
+
+| Parámetro | Valor |
+|---|---|
+| Estrategia | `finetune-last-block` |
+| Bloque descongelado | Último bloque de `VGG16.features`, índices `24:` |
+| Backbone | AdamW, tasa de aprendizaje `1e-5` |
+| Clasificador | AdamW, tasa de aprendizaje `1e-4` |
+| Épocas | 8 |
+| Tamaño de lote | 16 |
+| Semilla | 42 |
+| Dispositivo | CUDA; NVIDIA GeForce RTX 3050 Laptop GPU de 6 GB |
+| Selección del checkpoint | Mayor accuracy de validación |
+
+El comando de esta ejecución es:
+
+```powershell
+python train.py --device cuda --strategy finetune-last-block `
+  --epochs 8 --batch-size 16 --learning-rate 1e-4 `
+  --backbone-learning-rate 1e-5 --seed 42 `
+  --run-name vgg16_cifake_finetune_block5_8ep
+```
+
+`--run-name` genera archivos independientes y evita sobrescribir los
+experimentos 1 y 2. El entrenamiento partió nuevamente de los pesos ImageNet
+y de una cabeza nueva; no continuó desde un checkpoint congelado.
+
+#### Experimento 1: clasificador congelado, 10 épocas
 
 - **Identificador:** `frozen_vgg16_10ep`
 - **Estado:** ejecutado según la salida de consola y los artefactos guardados.
@@ -426,7 +474,7 @@ entrenamiento está en `results/loss_accuracy_frozen_10ep.png`.
 Los checkpoints contienen pesos del modelo; **no contienen métricas de test**.
 El archivo CSV es la fuente numérica de la figura y de la tabla por época.
 
-### 5.9. Experimento 2: clasificador congelado, 15 épocas
+#### Experimento 2: clasificador congelado, 15 épocas
 
 - **Identificador:** `frozen_vgg16_15ep`
 - **Estado:** completado según la salida de consola y el historial guardado.
@@ -484,41 +532,113 @@ se mantuvo fija.
 | Figura de la corrida | `results/loss_accuracy_frozen_15ep.png` | Curvas generadas por el entrenamiento |
 | Figura incluida en el informe | `docs/figures/loss_accuracy_frozen_15ep.png` | Copia para visualizar el informe en GitHub |
 
-### 5.10. Resultados de prueba
+#### Experimento 3: ajuste fino del último bloque
 
-**Pendiente.** No se ha consignado aquí ninguna evaluación con `evaluate.py`.
-Una vez seleccionada la estrategia final, ejecutar:
+- **Identificador:** `vgg16_cifake_finetune_block5_8ep`
+- **Estado:** completado en CUDA.
+- **Comando:** `python train.py --device cuda --strategy finetune-last-block --epochs 8 --batch-size 16 --learning-rate 1e-4 --backbone-learning-rate 1e-5 --seed 42 --run-name vgg16_cifake_finetune_block5_8ep`
+- **Estrategia:** VGG16 inicializada con ImageNet; bloque final
+  `features[24:]` y cabeza binaria entrenables; bloques anteriores congelados.
+- **Optimizador:** AdamW con tasa `1e-5` para el último bloque y `1e-4` para
+  el clasificador.
+- **Hardware:** ejecución indicada como CUDA en NVIDIA GeForce RTX 3050 6GB
+  Laptop GPU.
 
-```powershell
-python evaluate.py --device cuda
-```
+#### Métricas por época
 
-Completar esta sección con el reporte producido sobre `data/processed/test`.
-No usar estos resultados para decidir retrospectivamente cuál experimento
-preferir; de ser necesario elegir modelos, hacerlo con validación antes de
-abrir test.
+| Época | Pérdida train | Accuracy train | Pérdida val | Accuracy val |
+|---:|---:|---:|---:|---:|
+| 1 | 0.4454 | 78.72 % | 0.3173 | 87.10 % |
+| 2 | 0.2647 | 89.30 % | 0.2548 | 90.50 % |
+| 3 | 0.2099 | 91.69 % | 0.2315 | 90.90 % |
+| 4 | 0.1724 | 93.44 % | 0.2157 | 92.00 % |
+| 5 | 0.1499 | 93.85 % | 0.2057 | 92.10 % |
+| 6 | 0.1271 | 95.21 % | 0.1914 | **93.10 %** |
+| 7 | 0.1116 | 95.96 % | 0.1949 | 91.80 % |
+| 8 | 0.0934 | 96.73 % | **0.1880** | 92.80 % |
 
-| Métrica de test | REAL | FAKE | Promedio macro |
-|---|---:|---:|---:|
-| Precisión |  |  |  |
-| Recall |  |  |  |
-| F1 |  |  |  |
-| Accuracy global |  |  |  |
+La mejor accuracy de validación fue **93,10 % en la época 6** y ese es el
+checkpoint conservado por la regla de selección. La pérdida de validación más
+baja fue **0,1880 en la época 8**. En comparación con el mejor valor de
+validación del experimento 2 (87,60 %), la diferencia es de **5,50 puntos
+porcentuales** a favor del experimento 3; frente a la línea base de 10 épocas
+(87,20 %), es de 5,90 puntos. Estas diferencias describen resultados de
+validación y no estiman por sí solas el rendimiento en test.
 
-**Matriz de confusión (completar con `results/metrics_report.json`):**
+#### Curva de aprendizaje
+
+![Curvas de pérdida y exactitud del experimento 3: ajuste fino del último bloque](docs/figures/loss_accuracy_finetune_block5_8ep.png)
+
+**Figura 3.** Curvas de entrenamiento y validación de
+`vgg16_cifake_finetune_block5_8ep`. Fuente:
+`results/training_history_vgg16_cifake_finetune_block5_8ep.csv`.
+
+#### Artefactos y checkpoint
+
+| Artefacto | Ruta | Detalle |
+|---|---|---|
+| Checkpoint | `models/vgg16_cifake_finetune_block5_8ep.pth` | Mejor accuracy de validación; época 6 |
+| Historial | `results/training_history_vgg16_cifake_finetune_block5_8ep.csv` | Métricas de las 8 épocas |
+| Gráfica generada | `results/loss_accuracy_vgg16_cifake_finetune_block5_8ep.png` | Salida del entrenamiento |
+| Gráfica del informe | `docs/figures/loss_accuracy_finetune_block5_8ep.png` | Copia incluida en este documento |
+
+El checkpoint fue comprobado y registra la estrategia `finetune-last-block`,
+época 6, accuracy de validación 0,931, pérdida de validación 0,1914, lote 16,
+tasas `1e-4` y `1e-5`, semilla 42 y correspondencia de clases FAKE=0/REAL=1.
+
+### 5.6. Resultados
+
+La evaluación retenida se realizó el **19 de octubre de 2026**, después de
+seleccionar el checkpoint según la validación. Se utilizó CUDA y el conjunto
+local `data/processed/test`, con 1 000 imágenes balanceadas (500 FAKE y 500
+REAL). El checkpoint evaluado fue
+`models/vgg16_cifake_finetune_block5_8ep.pth`, conservado por obtener la mejor
+accuracy de validación (93,10 % en la época 6).
+
+| Métrica | FAKE | REAL | Promedio macro | Promedio ponderado |
+|---|---:|---:|---:|---:|
+| Precisión | 93,59 % | 93,41 % | 93,50 % | 93,50 % |
+| Recall | 93,40 % | 93,60 % | 93,50 % | 93,50 % |
+| F1 | 93,49 % | 93,51 % | 93,50 % | 93,50 % |
+| Imágenes evaluadas | 500 | 500 | 1 000 | 1 000 |
+
+La **accuracy global fue 93,50 %**: 935 de las 1 000 imágenes se clasificaron
+correctamente y 65 se clasificaron de forma incorrecta.
+
+| Experimento | Configuración | Mejor época según validación | Accuracy de validación | Accuracy de prueba |
+|---|---|---:|---:|---:|
+| 1 | VGG16 congelada, 10 épocas | 10 | 87,20 % | No evaluado |
+| 2 | VGG16 congelada, 15 épocas | 14 | 87,60 % | No evaluado |
+| 3 | Ajuste fino del último bloque, 8 épocas | 6 | 93,10 % | 93,50 % |
+
+Solo se evaluó en prueba el experimento seleccionado previamente mediante
+validación. Por ello, la tabla no permite comparar las tres estrategias en
+test.
+
+**Matriz de confusión** (filas: etiqueta real; columnas: predicción):
 
 | Etiqueta real \ predicción | FAKE | REAL |
 |---|---:|---:|
-| FAKE |  |  |
-| REAL |  |  |
+| FAKE | 467 | 33 |
+| REAL | 32 | 468 |
 
-- **Checkpoint evaluado:**
-- **Fecha de evaluación:**
-- **Observaciones:**
+![Matriz de confusión de la evaluación de prueba](results/confusion_matrix.png)
 
-### 5.11. Interpretación de las corridas
+**Figura 4.** Matriz de confusión del checkpoint seleccionado, generada por
+`evaluate.py` sobre la partición local de prueba.
 
-En ambas corridas las pérdidas de entrenamiento y validación disminuyen en
+- **Checkpoint evaluado:** `models/vgg16_cifake_finetune_block5_8ep.pth`
+- **Fecha y dispositivo:** 19 de octubre de 2026; CUDA.
+- **Artefactos:** `results/metrics_report.json` y
+  `results/confusion_matrix.png`.
+- **Observación:** 33 imágenes FAKE fueron clasificadas como REAL y 32
+  imágenes REAL como FAKE. Los errores quedaron casi equilibrados entre
+  clases. La partición es una muestra retenida del conjunto local derivado de
+  CIFAKE, no el test oficial ni una evaluación con generadores externos.
+
+### 5.7. Análisis de resultados
+
+En las tres corridas las pérdidas de entrenamiento y validación disminuyen en
 general. La corrida de 15 épocas alcanzó una accuracy de validación máxima
 ligeramente mayor en la época 14 que la corrida base en la época 10. La
 accuracy de validación no aumentó de forma monótona: tras 87,20 % en la época
@@ -533,23 +653,40 @@ el mejor checkpoint usa accuracy de validación. La mejora de 0,40 puntos
 porcentuales frente a la línea base es una mejora observada sobre `val`, no
 evidencia de mejora en `test`.
 
-La repetición de las métricas iniciales de la época 1 a la 10 concuerda con la
-semilla fija y la ejecución determinista configurada; no permite medir la
-estabilidad ante inicializaciones distintas. Una comparación de variabilidad
-requiere entrenar con otras semillas y registrar cada corrida.
+En el experimento 3, la accuracy de entrenamiento aumentó hasta 96,73 %,
+mientras que la accuracy de validación alcanzó un máximo de 93,10 % en la
+época 6, cayó a 91,80 % en la 7 y se recuperó a 92,80 % en la 8. La pérdida
+de validación también aumentó entre las épocas 6 y 7 antes de bajar en la 8.
+Esta separación entre entrenamiento y validación después de la época 6 es una
+señal de posible sobreajuste; por eso es apropiado conservar la época 6 según
+la métrica de selección, aunque la pérdida final sea menor.
 
-La accuracy de entrenamiento es inferior a la de validación en este
-experimento. Una explicación consistente con la implementación es que
+La mejora de validación respecto a las dos estrategias congeladas sugiere que
+adaptar el bloque final puede ser útil para este conjunto. Sin embargo, el
+experimento 3 modificó a la vez el grado de congelamiento, las tasas de
+aprendizaje por grupo y el tamaño de lote. Por tanto, no es posible atribuir
+toda la diferencia a un único cambio. Además, las corridas comparten la misma
+partición y semilla; no miden la variabilidad entre muestras o inicializaciones.
+
+En los experimentos congelados, la accuracy de entrenamiento es inferior a la
+de validación. Una explicación consistente con la implementación es que
 `Dropout(0.3)` está activo al entrenar y desactivado al validar; el modelo
-entrenado enfrenta ruido de regularización que no aparece en evaluación. Esta
-diferencia no prueba por sí misma un problema ni una mejor generalización.
+entrenado enfrenta ruido de regularización que no aparece en evaluación. En el
+experimento 3, la tendencia se invierte y la accuracy de entrenamiento supera
+a la de validación, lo que concuerda con la mayor capacidad de ajuste del
+bloque descongelado. Ninguna de estas diferencias prueba por sí sola una mejor
+generalización.
 
-El experimento 3 estudiará si adaptar el último bloque convolucional aporta
-información útil para CIFAKE. Esta variante todavía requiere modificar el
-entrenamiento y medirla; no es un resultado existente. Ninguna observación de
-validación sustituye la evaluación final en test.
+En la partición de prueba retenida, el checkpoint del experimento 3 alcanzó
+93,50 % de accuracy y 93,50 % de F1 macro. La matriz contabiliza 467 aciertos
+FAKE y 468 aciertos REAL; los errores fueron 33 FAKE clasificados como REAL y
+32 REAL clasificados como FAKE. El resultado es coherente con el rendimiento
+observado en validación, pero solo describe esta muestra de CIFAKE. No permite
+afirmar que el detector mantendrá ese desempeño en imágenes de otros
+generadores, fuentes o condiciones. La prueba se hizo después de cerrar la
+selección del checkpoint y no debe reutilizarse para ajustar hiperparámetros.
 
-## 6. Ventajas, limitaciones y amenazas a la validez
+## 6. Ventajas y limitaciones
 
 ### Ventajas
 
@@ -595,31 +732,30 @@ validación sustituye la evaluación final en test.
 
 ## 7. Conclusiones y recomendaciones
 
-### Conclusiones provisionales
+### Conclusiones
 
-Las dos corridas confirman que la cabeza clasificadora sobre VGG16
-preentrenada aprende sobre la muestra CIFAKE. La corrida de 10 épocas alcanzó
-87,20 % de accuracy de validación; la de 15 alcanzó 87,60 % en la época 14.
-La mínima pérdida de validación de la corrida larga se observó en la época 15.
-Todas estas cifras corresponden exclusivamente a `val`.
+Las tres corridas muestran mejoras progresivas en el mejor accuracy de
+validación: 87,20 % con la cabeza congelada a 10 épocas, 87,60 % al extender
+la misma estrategia a 15 épocas y 93,10 % al ajustar el bloque final durante
+8 épocas. En la tercera corrida el mejor accuracy aparece en la época 6,
+mientras que la pérdida mínima aparece en la época 8. Todas estas cifras
+corresponden exclusivamente a `val`.
 
-No se puede concluir aún que el modelo logre 87,20 % en datos de prueba o que
-detecte imágenes generadas por sistemas diferentes a Stable Diffusion v1.4.
-La conclusión definitiva depende de la evaluación retenida, del análisis de
-errores y de las comparaciones que realmente se ejecuten.
+En la evaluación retenida, el checkpoint del experimento 3 obtuvo 93,50 % de
+accuracy y 93,50 % de F1 macro sobre 1 000 imágenes de prueba. La matriz de
+confusión muestra un comportamiento equilibrado en esta muestra, aunque se
+equivocó en 65 imágenes. Este resultado no debe generalizarse a imágenes de
+otros generadores o fuentes: el conjunto local deriva de CIFAKE y la clase
+FAKE está asociada a Stable Diffusion v1.4.
 
 ### Recomendaciones para continuar
 
-1. Las copias del checkpoint, CSV y figuras de las corridas 10 y 15 épocas ya
-   se conservaron con identificadores específicos.
-2. Implementar el experimento de ajuste fino por separado; usar una tasa
-   pequeña para el bloque descongelado y documentar las tasas de cada grupo de
-   parámetros.
-3. Elegir la configuración con validación y evaluar test una sola vez al
-   finalizar las comparaciones.
-4. Para ampliar el estudio, repetir con varias semillas y evaluar imágenes
-   externas a CIFAKE.
-5. Documentar cualquier cambio de arquitectura, lote, tasa de aprendizaje,
+1. Conservar el checkpoint y los artefactos de la evaluación de prueba; no
+   usar esa partición para elegir nuevos hiperparámetros o estrategias.
+2. Repetir la estrategia seleccionada con varias semillas para estimar la
+   variabilidad del entrenamiento.
+3. Ampliar la evaluación con imágenes externas a CIFAKE y generadores no vistos.
+4. Documentar cualquier cambio de arquitectura, lote, tasa de aprendizaje,
    resolución, pesos iniciales o preprocesamiento como un experimento nuevo.
 
 ### Registro para experimentos futuros
@@ -629,11 +765,11 @@ distintos. Los resultados de estas corridas se dejan en blanco hasta medirlos.
 
 | Experimento | Épocas | Estrategia / cambio | Mejor época | Mejor accuracy val | Pérdida val | Accuracy test | Checkpoint / figura |
 |---|---:|---|---:|---:|---:|---:|---|
-| 1 | 10 | VGG16 congelada; clasificador lineal | 10 | 87,20 % | 0,3281 |  | `frozen_10ep` |
-| 2 | 15 | VGG16 congelada; cambia solo duración | 14 | 87,60 % | 0,3137 (época 15) |  | `frozen_15ep` |
-| 3 | 5–8 | Ajuste fino del último bloque; tasa menor y lote 16 |  |  |  |  |  |
+| 1 | 10 | VGG16 congelada; clasificador lineal | 10 | 87,20 % | 0,3281 | No evaluado | `frozen_10ep` |
+| 2 | 15 | VGG16 congelada; cambia solo duración | 14 | 87,60 % | 0,3137 (época 15) | No evaluado | `frozen_15ep` |
+| 3 | 8 | Ajuste fino del último bloque; tasas 1e-5 / 1e-4 y lote 16 | 6 | 93,10 % | 0,1880 (época 8) | 93,50 % | `finetune_block5_8ep` |
 
-## 8. Bibliografía
+## 8. Bibliografía (APA)
 
 Bird, J. J., & Lotfi, A. (2023). CIFAKE: Image classification and explainable
 identification of AI-generated synthetic images. *arXiv*.

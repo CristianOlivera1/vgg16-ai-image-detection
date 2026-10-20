@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from pathlib import Path
 
 import matplotlib
 import torch
@@ -28,8 +29,8 @@ import matplotlib.pyplot as plt
 DATA_DIR = PROJECT_ROOT / "data" / "processed"
 MODEL_DIR = PROJECT_ROOT / "models"
 RESULTS_DIR = PROJECT_ROOT / "results"
-CHECKPOINT_PATH = MODEL_DIR / "vgg16_cifake_best.pth"
 SEED = 42
+FINE_TUNE_LAST_BLOCK_START = 24
 
 
 def create_loaders(
@@ -108,10 +109,11 @@ def run_epoch(
     return total_loss / total_samples, total_correct / total_samples
 
 
-def save_history(history: list[dict[str, float]]) -> None:
+def save_history(history: list[dict[str, float]], run_name: str | None) -> None:
     """Write the epoch metrics and a loss/accuracy plot to results/."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    history_path = RESULTS_DIR / "training_history.csv"
+    suffix = f"_{run_name}" if run_name else ""
+    history_path = RESULTS_DIR / f"training_history{suffix}.csv"
     with history_path.open("w", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=list(history[0]))
         writer.writeheader()
@@ -128,7 +130,10 @@ def save_history(history: list[dict[str, float]]) -> None:
     axes[1].set(title="Accuracy", xlabel="Epoch", ylabel="Accuracy")
     axes[1].legend()
     figure.tight_layout()
-    figure.savefig(RESULTS_DIR / "loss_accuracy_curves.png", dpi=150)
+    figure_name = "loss_accuracy_curves.png"
+    if run_name:
+        figure_name = f"loss_accuracy_{run_name}.png"
+    figure.savefig(RESULTS_DIR / figure_name, dpi=150)
     plt.close(figure)
 
 
@@ -136,15 +141,70 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument(
+        "--strategy",
+        choices=("head-only", "finetune-last-block"),
+        default="head-only",
+        help="Freeze the whole backbone or fine-tune its final convolutional block.",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=None,
+        help="Classifier learning rate (default: 1e-3 head-only, 1e-4 fine-tuning).",
+    )
+    parser.add_argument(
+        "--backbone-learning-rate",
+        type=float,
+        default=1e-5,
+        help="Learning rate for the unfrozen VGG16 block.",
+    )
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument(
+        "--run-name",
+        help="Unique name for this run's checkpoint and result files.",
+    )
     args = parser.parse_args()
-    if args.epochs <= 0 or args.batch_size <= 0 or args.learning_rate <= 0:
+    learning_rate = args.learning_rate
+    if learning_rate is None:
+        learning_rate = 1e-4 if args.strategy == "finetune-last-block" else 1e-3
+    if args.epochs <= 0 or args.batch_size <= 0 or learning_rate <= 0:
         parser.error("epochs, batch-size and learning-rate must be greater than zero")
     if args.workers < 0:
         parser.error("workers cannot be negative")
+    if args.backbone_learning_rate <= 0:
+        parser.error("backbone-learning-rate must be greater than zero")
+    if args.run_name and (
+        Path(args.run_name).name != args.run_name
+        or args.run_name in {".", ".."}
+    ):
+        parser.error("run-name must be a filename-safe identifier, not a path")
+
+    fine_tune_last_block = args.strategy == "finetune-last-block"
+    if fine_tune_last_block and not args.run_name:
+        parser.error(
+            "fine-tuning requires --run-name so its checkpoint and metrics "
+            "do not overwrite another experiment"
+        )
+    checkpoint_path = (
+        MODEL_DIR / f"{args.run_name}.pth"
+        if args.run_name
+        else MODEL_DIR / "vgg16_cifake_best.pth"
+    )
+    if args.run_name:
+        result_paths = (
+            checkpoint_path,
+            RESULTS_DIR / f"training_history_{args.run_name}.csv",
+            RESULTS_DIR / f"loss_accuracy_{args.run_name}.png",
+        )
+        existing_paths = [path for path in result_paths if path.exists()]
+        if existing_paths:
+            parser.error(
+                "run-name already has output files; choose a new name: "
+                + ", ".join(str(path) for path in existing_paths)
+            )
 
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
@@ -159,9 +219,28 @@ def main() -> None:
         device,
         args.seed,
     )
-    model = build_model(pretrained=True).to(device)
-    trainable_parameters = [p for p in model.parameters() if p.requires_grad]
-    optimizer = AdamW(trainable_parameters, lr=args.learning_rate)
+    model = build_model(
+        pretrained=True,
+        fine_tune_last_block=fine_tune_last_block,
+    ).to(device)
+    if fine_tune_last_block:
+        features = model.features
+        if not isinstance(features, nn.Sequential):
+            raise TypeError("Expected VGG16 features to be an nn.Sequential module.")
+        optimizer = AdamW(
+            [
+                {
+                    "params": features[FINE_TUNE_LAST_BLOCK_START:].parameters(),
+                    "lr": args.backbone_learning_rate,
+                },
+                {"params": model.classifier.parameters(), "lr": learning_rate},
+            ]
+        )
+    else:
+        trainable_parameters = [
+            parameter for parameter in model.parameters() if parameter.requires_grad
+        ]
+        optimizer = AdamW(trainable_parameters, lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
     history: list[dict[str, float]] = []
     best_val_accuracy = -1.0
@@ -169,7 +248,15 @@ def main() -> None:
 
     print(f"Dispositivo: {device}")
     print(f"Clases: {class_to_idx}")
-    print("Backbone: VGG16 ImageNet1K_V1 congelado; clasificador binario entrenable.")
+    if fine_tune_last_block:
+        print(
+            "Backbone: VGG16 ImageNet1K_V1; se ajusta el último bloque "
+            f"(features[{FINE_TUNE_LAST_BLOCK_START}:]) con lr="
+            f"{args.backbone_learning_rate:g}; clasificador con lr="
+            f"{learning_rate:g}."
+        )
+    else:
+        print("Backbone: VGG16 ImageNet1K_V1 congelado; clasificador binario entrenable.")
     for epoch in range(1, args.epochs + 1):
         train_loss, train_accuracy = run_epoch(
             model, train_loader, criterion, device, optimizer
@@ -201,16 +288,23 @@ def main() -> None:
                     "class_names": list(CLASS_NAMES),
                     "class_to_idx": class_to_idx,
                     "pretrained_weights": "IMAGENET1K_V1",
+                    "strategy": args.strategy,
+                    "learning_rate": learning_rate,
+                    "backbone_learning_rate": (
+                        args.backbone_learning_rate if fine_tune_last_block else None
+                    ),
+                    "batch_size": args.batch_size,
+                    "seed": args.seed,
                     "epoch": epoch,
                     "val_accuracy": val_accuracy,
                     "val_loss": val_loss,
                     "image_size": list(PRETRAINED_WEIGHTS.transforms().crop_size),
                 },
-                CHECKPOINT_PATH,
+                checkpoint_path,
             )
-            print(f"Mejor checkpoint guardado en {CHECKPOINT_PATH}")
+            print(f"Mejor checkpoint guardado en {checkpoint_path}")
 
-    save_history(history)
+    save_history(history, args.run_name)
     print(f"Historial y curvas guardados en {RESULTS_DIR}")
 
 

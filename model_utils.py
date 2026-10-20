@@ -6,6 +6,7 @@ from typing import Any
 import torch
 from torch import nn
 from torchvision.models import VGG16_Weights, vgg16
+from torchvision.models.vgg import VGG
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_CHECKPOINT = PROJECT_ROOT / "models" / "vgg16_cifake_best.pth"
@@ -15,12 +16,20 @@ PRETRAINED_WEIGHTS = VGG16_Weights.IMAGENET1K_V1
 VGG16_FEATURES = 512
 
 
-def build_model(pretrained: bool) -> nn.Module:
-    """Build VGG16 with frozen convolutional features and a binary head."""
+def build_model(pretrained: bool, fine_tune_last_block: bool = False) -> VGG:
+    """Build VGG16 with a binary head and optionally unfreeze its final block."""
     weights = PRETRAINED_WEIGHTS if pretrained else None
-    model = vgg16(weights=weights)
-    for parameter in model.features.parameters():
+    model: VGG = vgg16(weights=weights)
+    features = model.features
+    if not isinstance(features, nn.Sequential):
+        raise TypeError("Expected VGG16 features to be an nn.Sequential module.")
+
+    for parameter in features.parameters():
         parameter.requires_grad = False
+
+    if fine_tune_last_block:
+        for parameter in features[24:].parameters():
+            parameter.requires_grad = True
 
     model.avgpool = nn.AdaptiveAvgPool2d((1, 1))
     model.classifier = nn.Sequential(

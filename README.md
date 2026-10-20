@@ -60,10 +60,21 @@ python evaluate.py
 python predict.py "C:\ruta\a\imagen.jpg"
 ```
 
-El entrenamiento usa VGG16 preentrenado en ImageNet, congela sus capas
-convolucionales y ajusta un clasificador binario. `--device auto` selecciona
-CUDA si está disponible y, en caso contrario, CPU. En el primer entrenamiento
-Torchvision puede descargar los pesos preentrenados.
+El entrenamiento usa VGG16 preentrenado en ImageNet y ajusta un clasificador
+binario. Por defecto se congelan las capas convolucionales; la estrategia
+`finetune-last-block` permite entrenar el bloque final con una tasa menor.
+`--device auto` selecciona CUDA si está disponible y, en caso contrario, CPU.
+En el primer entrenamiento Torchvision puede descargar los pesos preentrenados.
+
+Para ajustar el último bloque convolucional con tasas de aprendizaje
+separadas y guardar la ejecución en archivos propios:
+
+```powershell
+python train.py --device cuda --strategy finetune-last-block `
+  --epochs 8 --batch-size 16 --learning-rate 1e-4 `
+  --backbone-learning-rate 1e-5 --seed 42 `
+  --run-name vgg16_cifake_finetune_block5_8ep
+```
 
 Artefactos generados:
 
