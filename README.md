@@ -1,73 +1,116 @@
-# Detección de imágenes generadas por IA con VGG16
+# VGG16 AI-Generated Image Classification
 
-Proyecto de clasificación binaria con VGG16 para distinguir imágenes reales de
-imágenes generadas por IA. El dataset fuente CIFAKE se conserva en su ubicación
-original; el proyecto copia una muestra balanceada de 10 000 imágenes y la
-divide en entrenamiento, validación y prueba.
+This project fine-tunes an ImageNet-pretrained VGG16 model to classify images
+as `REAL` or `FAKE` using a balanced 10,000-image sample of CIFAKE. The reported
+test metrics describe a held-out split from CIFAKE only; they do **not** show
+that the model can reliably determine whether arbitrary images from the
+internet are authentic.
 
-## Estructura
+> [!WARNING]
+> This model has produced confident false `FAKE` predictions on real photos
+> from outside CIFAKE. Its softmax score is not a calibrated probability of
+> authenticity. Do not use this project to verify real-world images.
+
+## Test-set results
+
+The selected checkpoint, `vgg16_cifake_finetune_block5_8ep.pth`, was evaluated
+on 1,000 held-out images (500 per class). It achieved 93.50% accuracy and
+93.50% macro F1 on this CIFAKE split.
+
+| True class | Predicted FAKE | Predicted REAL |
+|---|---:|---:|
+| FAKE | 467 | 33 |
+| REAL | 32 | 468 |
+
+Rows show the true class and columns show the predicted class. In this test
+split, 32 of the 500 REAL images were classified as FAKE. Performance on
+external images can be much worse.
+
+![VGG16 test-set confusion matrix](docs/figures/confusion_matrix_test.png)
+
+The chart below shows the training and validation history for the fine-tuning
+run. The best validation accuracy was 93.10% at epoch 6; the checkpoint was
+selected using validation, before the one-time test evaluation.
+
+![VGG16 fine-tuning training and validation curves](docs/figures/loss_accuracy_finetune_block5_8ep.png)
+
+## Dataset and splits
+
+The dataset source is
+[CIFAKE on Hugging Face](https://huggingface.co/datasets/yanbax/CIFAKE_autotrain_compatible).
+The local preparation script samples 5,000 images from each class with seed 42
+and copies them into these splits:
+
+| Split | REAL | FAKE | Total | Purpose |
+|---|---:|---:|---:|---|
+| Train | 4,000 | 4,000 | 8,000 | Fit model parameters |
+| Validation | 500 | 500 | 1,000 | Compare training runs and select a checkpoint |
+| Test | 500 | 500 | 1,000 | Final evaluation after model selection |
+
+The local test split is sampled from the available CIFAKE training data; it is
+not CIFAKE's original official test split. CIFAKE's real images come from
+CIFAR-10 and its synthetic images were generated with Stable Diffusion v1.4.
+This limited source coverage is one reason results should not be generalized
+to arbitrary real and AI-generated images.
+
+## Project structure
 
 ```text
 vgg16-ai-image-detection/
 ├── data/
-│   ├── raw/                 # Referencia/documentación del dataset fuente
-│   └── processed/           # Se crea al ejecutar prepare_dataset.py
-│       ├── train/REAL/
-│       ├── train/FAKE/
-│       ├── val/REAL/
-│       ├── val/FAKE/
-│       ├── test/REAL/
-│       └── test/FAKE/
-├── models/                  # Pesos/checkpoints locales; no se versionan
-├── results/                 # Métricas y gráficas generadas
+│   ├── raw/                 # Dataset source notes; source data stays outside Git
+│   └── processed/           # Local train/val/test image folders
+├── docs/
+│   └── figures/             # Figures embedded in this README
+├── models/                  # Local model checkpoints (not tracked)
+├── results/                 # Local metrics and generated plots (not tracked)
 ├── prepare_dataset.py
 ├── train.py
 ├── evaluate.py
 ├── predict.py
 ├── model_utils.py
 ├── requirements.txt
-└── informe_vgg16.md
+└── README.md
 ```
 
-## Preparar los datos
+## Setup
 
-La fuente esperada contiene `real/` y `fake/`, con imágenes JPG directamente
-dentro de cada carpeta. La configuración predeterminada apunta a
-`C:\Users\USUARIO\Downloads\train`.
+Use Python and a PyTorch build compatible with your hardware. On Windows
+PowerShell, activate the project's virtual environment and install the
+requirements:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+The default dataset source path is
+`C:\Users\USUARIO\Downloads\train`, containing `real/` and `fake/` folders.
+Prepare the sample:
+
+```powershell
 python prepare_dataset.py
 ```
 
-Para usar otra ubicación:
+To use a different source directory:
 
 ```powershell
 python prepare_dataset.py --source-dir "D:\datasets\CIFAKE\train"
 ```
 
-El muestreo usa la semilla `42`, selecciona 5 000 imágenes por clase y copia,
-sin mover ni modificar la fuente, 4 000 por clase a `train`, 500 por clase a
-`val` y 500 por clase a `test`. El destino no se sobrescribe: para regenerarlo,
-renombra o elimina primero `data/processed`.
+The script does not modify the source dataset and refuses to overwrite an
+existing `data/processed/` directory. Move or rename that directory before
+preparing a new sample.
 
-## Entrenar, evaluar y predecir
+## Train, evaluate, and predict
+
+Run the default head-only training configuration:
 
 ```powershell
-python -m pip install -r requirements.txt
-python train.py
-python evaluate.py
-python predict.py "C:\ruta\a\imagen.jpg"
+python train.py --device cuda
 ```
 
-El entrenamiento usa VGG16 preentrenado en ImageNet y ajusta un clasificador
-binario. Por defecto se congelan las capas convolucionales; la estrategia
-`finetune-last-block` permite entrenar el bloque final con una tasa menor.
-`--device auto` selecciona CUDA si está disponible y, en caso contrario, CPU.
-En el primer entrenamiento Torchvision puede descargar los pesos preentrenados.
-
-Para ajustar el último bloque convolucional con tasas de aprendizaje
-separadas y guardar la ejecución en archivos propios:
+The fine-tuning run documented in this repository can be reproduced with:
 
 ```powershell
 python train.py --device cuda --strategy finetune-last-block `
@@ -76,14 +119,31 @@ python train.py --device cuda --strategy finetune-last-block `
   --run-name vgg16_cifake_finetune_block5_8ep
 ```
 
-Artefactos generados:
+Evaluate the selected checkpoint on the held-out local test split:
 
-- `models/vgg16_cifake_best.pth`: checkpoint con mejor exactitud de validación.
-- `results/training_history.csv` y `results/loss_accuracy_curves.png`:
-  historial y curvas de entrenamiento.
-- `results/metrics_report.json` y `results/confusion_matrix.png`:
-  evaluación final en test.
+```powershell
+python evaluate.py --device cuda `
+  --checkpoint models\vgg16_cifake_finetune_block5_8ep.pth
+```
 
-Se pueden ajustar épocas, lote, tasa de aprendizaje, workers y dispositivo;
-por ejemplo: `python train.py --epochs 5 --batch-size 16 --device cpu`.
-Los directorios de datos, modelos y resultados se excluyen de Git.
+Try a prediction on one image:
+
+```powershell
+python predict.py "C:\path\to\image.jpg" --device cuda `
+  --checkpoint models\vgg16_cifake_finetune_block5_8ep.pth
+```
+
+`predict.py` prints the predicted class and the model's softmax score. That
+score is not a calibrated probability, and a high score does not guarantee a
+correct prediction—especially for images outside CIFAKE.
+
+## Generated outputs
+
+- `models/*.pth`: trained model checkpoints.
+- `results/training_history*.csv`: per-epoch training and validation metrics.
+- `results/loss_accuracy*.png`: training and validation curves.
+- `results/metrics_report.json`: per-class test metrics and confusion matrix.
+- `results/confusion_matrix.png`: test-set confusion matrix.
+
+Local data, checkpoints, and generated results are excluded from Git. The
+figures under `docs/figures/` are committed copies used by this README.
