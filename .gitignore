@@ -22,3 +22,4 @@ results/*
 .ipynb_checkpoints/
 .vscode/
 .idea/
+informe_vgg16.md
