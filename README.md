@@ -62,6 +62,9 @@ vgg16-ai-image-detection/
 │   └── processed/           # Local train/val/test image folders
 ├── docs/
 │   └── figures/             # Figures embedded in this README
+├── app/
+│   ├── index.html           # Local image-classification interface
+│   └── server.py            # FastAPI web app and prediction API
 ├── models/                  # Local model checkpoints (not tracked)
 ├── results/                 # Local metrics and generated plots (not tracked)
 ├── prepare_dataset.py
@@ -104,6 +107,25 @@ preparing a new sample.
 
 ## Train, evaluate, and predict
 
+### Start the web interface
+
+Start the FastAPI server from the project root:
+
+```powershell
+python -m app.server
+```
+
+Then open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser. The
+server hosts both the interface and the `/api/models` and `/api/predict` API
+routes. Do not use VS Code Live Server's `:5500` URL as the API server; the
+interface is configured to send its API requests to port `8000` when opened
+from another origin.
+
+Keep the terminal running while using the web interface. Press `Ctrl+C` to
+stop the server.
+
+### Train and evaluate from the terminal
+
 Run the default head-only training configuration:
 
 ```powershell
@@ -118,6 +140,25 @@ python train.py --device cuda --strategy finetune-last-block `
   --backbone-learning-rate 1e-5 --seed 42 `
   --run-name vgg16_cifake_finetune_block5_8ep
 ```
+
+## Live
+
+Test app live:
+
+```powershell
+python -m app.server
+```
+
+### Input image size
+
+You do **not** need to resize prediction images to 32 × 32 yourself. The
+32 × 32 size describes the CIFAKE images used for training. Before inference,
+`predict.py` applies the Torchvision ImageNet preprocessing transform: it
+resizes the image and takes a 224 × 224 center crop, then normalizes it. Larger
+images can therefore be loaded and classified; they are not passed to the
+network at their original dimensions. For a 32 × 32 CIFAKE image, this
+preprocessing enlarges the image, but it cannot restore detail that was not
+present in the original.
 
 Evaluate the selected checkpoint on the held-out local test split:
 

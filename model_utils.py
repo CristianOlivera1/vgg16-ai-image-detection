@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any
+from PIL import Image, ImageOps
 
 import torch
 from torch import nn
@@ -14,7 +15,15 @@ CLASS_NAMES = ("FAKE", "REAL")
 MODEL_NAME = "vgg16_gap_v1"
 PRETRAINED_WEIGHTS = VGG16_Weights.IMAGENET1K_V1
 VGG16_FEATURES = 512
+DATASET_SIZE = 32
 
+def prepare_image(image: Image.Image) -> Image.Image:
+    """Recorte cuadrado central y reducción a 32×32, como en CIFAKE."""
+    return ImageOps.fit(
+        image.convert("RGB"),
+        (DATASET_SIZE, DATASET_SIZE),
+        method=Image.Resampling.BICUBIC,
+    )
 
 def build_model(pretrained: bool, fine_tune_last_block: bool = False) -> VGG:
     """Build VGG16 with a binary head and optionally unfreeze its final block."""
